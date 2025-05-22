@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTextEdit, QToolBar, QToolButton, QSplitter, QTabWidget,
     QStatusBar, QDockWidget, QListWidget, QListWidgetItem,
-    QTabBar, QTreeView, QMenuBar, QMenu,QFileDialog,QPushButton
+    QTabBar, QTreeView, QMenuBar, QMenu,QFileDialog,QPushButton,QInputDialog
 )
 from PySide6.QtGui import QAction, QIcon, QFont
 from PySide6.QtCore import Qt, QSize, QDir, QModelIndex
@@ -269,7 +269,8 @@ class Code_Edditor(QMainWindow):
         self.show_output_action.setChecked(True)
         # Now add menus to your self.menu_bar object
         self.file_menu = self.menu_bar.addMenu("File")
-        self.file_menu.addAction("Open folder", self.open_folder)
+        self.file_menu.addAction("Open Folder", self.open_folder)
+        self.file_menu.addAction("New File", self.create_new_file)
         self.edit_menu = self.menu_bar.addMenu("Edit")
         self.selection_menu = self.menu_bar.addMenu("Selection")
         self.view_menu = self.menu_bar.addMenu("View")
@@ -278,6 +279,7 @@ class Code_Edditor(QMainWindow):
         self.go_menu = self.menu_bar.addMenu("Go")
         self.run_menu = self.menu_bar.addMenu("Run")
         self.terminal_menu = self.menu_bar.addMenu("Terminal")
+        self.terminal_menu.addAction("New Terminal", self.create_output_panel)
         self.show_explorer_action.toggled.connect(self.explorer_panel.setVisible)
         self.show_output_action.toggled.connect(self.output_panel.setVisible)
 
@@ -293,7 +295,16 @@ class Code_Edditor(QMainWindow):
     def create_status_bar(self):
         self.status_bar = QStatusBar(self)
         self.setStatusBar(self.status_bar)
-        
+    def create_new_file(self):
+        selected_folder = self.explorer_tree.currentIndex()
+        if selected_folder.isValid():
+            folder_path = self.file_system_model.filePath(selected_folder)
+            file_name, ok = QInputDialog.getText(self, "New File", "Enter file name:")
+            if ok and file_name:
+                new_file_path = os.path.join(folder_path, file_name)
+                with open(new_file_path, 'w') as f:
+                    pass
+
     
 
 
