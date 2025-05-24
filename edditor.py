@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QIcon, QFont
 from PySide6.QtCore import Qt, QSize, QDir, QModelIndex
 from PySide6.QtWidgets import QFileSystemModel
+from PySide6.QtWebEngineWidgets import QWebEngineView
+
 import os
 import subprocess
 from winpty import *
@@ -244,7 +246,8 @@ class Code_Edditor(QMainWindow):
         base_name = os.path.basename(file_path)
         self.tab_widget.addTab(editor, base_name)
         self.tab_widget.setCurrentWidget(editor)
-
+    def integrated_browser(self):
+        pass
     def create_output_panel(self):
         self.output_panel = QDockWidget("Output", self)
         self.output_panel.setObjectName("OutputPanel")
