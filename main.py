@@ -2,45 +2,59 @@ import sys
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTextEdit, QToolBar, QToolButton, QSplitter, QTabWidget,
-    QStatusBar, QDockWidget, QListWidget, QListWidgetItem, QTabBar, QTreeView
+    QStatusBar, QDockWidget, QListWidget, QListWidgetItem,
+    QTabBar, QTreeView, QMenuBar, QMenu,QFileDialog,QPushButton,QInputDialog,
+    QLineEdit, # Added QLineEdit for terminal input
+    QMessageBox # Added QMessageBox for error popups
 )
 from PySide6.QtGui import QAction, QIcon, QFont
-from PySide6.QtCore import Qt, QSize, QDir
+from PySide6.QtCore import Qt, QSize, QDir, QModelIndex
 from PySide6.QtWidgets import QFileSystemModel
-import tkinter as tk
-from tkinter import filedialog
+import os
+import subprocess
 
-class VSCodeClone(QMainWindow):
-    """
-    A simplified clone of the VS Code user interface using PySide6.
-    """
+class ExplorerTreeView(QTreeView):
+    def __init__(self, parent=None, open_file_callback=None):
+        super().__init__(parent)
+        self.open_file_callback = open_file_callback
+
+    def mousePressEvent(self, event):
+        # Handle middle-click to open file
+        if event.button() == Qt.MouseButton.MiddleButton:
+            index = self.indexAt(event.pos())
+            if index.isValid():
+                model = self.model()
+                if isinstance(model, QFileSystemModel):
+                    file_path = model.filePath(index)
+                    # Check if it's a file and call the callback
+                    if os.path.isfile(file_path) and self.open_file_callback:
+                        self.open_file_callback(file_path)
+        super().mousePressEvent(event)
+
+class Code_Edditor(QMainWindow):
     def __init__(self):
         super().__init__()
-
-        self.setWindowTitle("VS Code Clone")
-        self.setGeometry(100, 100, 1200, 800)  # Larger initial size
-
-        self.create_actions()
-        self.create_toolbars()
-        self.create_status_bar()
-        self.create_central_widget()
-        self.create_panels()  # Create the side panels
-        self.file_menu = self.menuBar().addMenu("File")  # Get the File menu
-        self.file_menu.addAction(self.open_folder_action) # Add the new action
-
-        # Apply a stylesheet for a more VSCode-like appearance.  This is basic,
-        # and you'd likely want a more comprehensive one.
+        self.setGeometry(100, 100, 800, 600)
+        self.setWindowTitle("Devloop IDE")
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #252526; /* Dark background */
-                color: #e0e0e0;         /* Light text */
+                color: #e0e0e0;            /* Light text */
             }
             QTextEdit {
-                background-color: #1e1e1e;  /* Darker text area background */
+                background-color: #1e1e1e; /* Darker text area background */
                 color: #ffffff;
                 border: 1px solid #333;
                 font-family: 'Consolas', monospace; /* Use a monospace font */
                 font-size: 14px;
+            }
+            QLineEdit { /* Style for the new QLineEdit */
+                background-color: #1e1e1e;
+                color: #ffffff;
+                border: 1px solid #333;
+                font-family: 'Consolas', monospace;
+                font-size: 14px;
+                padding: 5px;
             }
             QToolBar {
                 background-color: #2d2d2d; /* Dark toolbar background */
@@ -114,8 +128,8 @@ class VSCodeClone(QMainWindow):
                 border: 1px solid #333;
             }
             QDockWidget > QWidget {
-                 background-color: #1e1e1e;
-                 color: #e0e0e0;
+                background-color: #1e1e1e;
+                color: #e0e0e0;
             }
 
             QDockWidget::title {
@@ -144,209 +158,353 @@ class VSCodeClone(QMainWindow):
                 background-color: #3e3e3e;
                 color: #ffffff;
             }
+            /* --- MENU BAR STYLES --- */
+            QMenuBar {
+                background-color: #2d2d2d; /* Dark background for the entire menu bar */
+                color: #b0b0b0;            /* Light gray text for menu titles */
+                border-bottom: 1px solid #3a3a3a; /* Subtle bottom border */
+                font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+                font-size: 13px;
+                padding: 0px; /* Remove default padding for a tighter look */
+            }
 
+            /* Styles for individual menu titles on the menu bar (e.g., "File", "Edit") */
+            QMenuBar::item {
+                background-color: transparent; /* No background by default */
+                color: #b0b0b0;
+                padding: 8px 12px; /* Padding inside each menu item */
+                margin: 0px 2px;   /* Small margin between menu items */
+                border-radius: 3px; /* Slightly rounded corners */
+            }
+
+            /* When a menu bar item is hovered over or selected */
+            QMenuBar::item:selected {
+                background-color: #3e3e3e; /* Darker on hover */
+                color: #ffffff;            /* White text on hover */
+            }
+
+            /* When a menu bar item is pressed down */
+            QMenuBar::item:pressed {
+                background-color: #505050; /* Even darker when pressed */
+                color: #ffffff;
+            }
+
+            /* --- DROPDOWN MENU (QMenu) STYLES --- */
+            QMenu {
+                background-color: #252526; /* Dark background for the dropdown menu */
+                border: 1px solid #3a3a3a; /* Border around the dropdown */
+                border-radius: 4px;        /* Slightly rounded corners for the dropdown */
+                padding: 5px;              /* Padding inside the dropdown */
+            }
+
+            /* Styles for individual items within the dropdown menu (e.g., "New File") */
+            QMenu::item {
+                background-color: transparent;
+                color: #e0e0e0;
+                padding: 6px 15px; /* Padding for each item in the dropdown */
+                margin: 2px 0px;   /* Small vertical margin between items */
+                border-radius: 3px;
+            }
+
+            /* When a dropdown menu item is hovered over */
+            QMenu::item:selected {
+                background-color: #3e3e3e; /* Darker on hover */
+                color: #ffffff;            /* White text on hover */
+            }
+
+            /* When a dropdown menu item is disabled */
+            QMenu::item:disabled {
+                color: #777777; /* Gray out disabled items */
+            }
+
+            /* Styles for the separator lines in the dropdown menu */
+            QMenu::separator {
+                height: 1px;               /* Thin line */
+                background-color: #3a3a3a; /* Dark gray line */
+                margin: 5px 10px;          /* Margin above/below and horizontal padding */
+            }
+            QPushButton {
+                background-color: #007acc; /* VS Code blue */
+                color: #ffffff;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #005f99; /* Darker blue on hover */
+            }
+            QPushButton:pressed {
+                background-color: #004c7f; /* Even darker blue on press */
+            }
         """)
+        self.create_file_explorer()
+        self.create_output_panel()
+        self.create_code_area()
+        self.create_menu_bar()
+        self.create_status_bar()
 
-    def create_actions(self):
-        """
-        Creates the actions for the toolbar and menus.
-        """
-        self.new_action = QAction(QIcon("icons/new.png"), "New File", self)
-        self.new_action.setShortcut("Ctrl+N")
-        self.open_action = QAction(QIcon("icons/open.png"), "Open File", self)
-        self.open_action.setShortcut("Ctrl+O")
-        self.save_action = QAction(QIcon("icons/save.png"), "Save File", self)
-        self.save_action.setShortcut("Ctrl+S")
-        self.exit_action = QAction("Exit", self)
-        self.exit_action.setShortcut("Ctrl+Q")
-        self.open_folder_action = QAction("Open Folder...", self) # New Action
-
-        self.cut_action = QAction(QIcon("icons/cut.png"), "Cut", self)
-        self.cut_action.setShortcut("Ctrl+X")
-        self.copy_action = QAction(QIcon("icons/copy.png"), "Copy", self)
-        self.copy_action.setShortcut("Ctrl+C")
-        self.paste_action = QAction(QIcon("icons/paste.png"), "Paste", self)
-        self.paste_action.setShortcut("Ctrl+V")
-        self.undo_action = QAction(QIcon("icons/undo.png"), "Undo", self)
-        self.undo_action.setShortcut("Ctrl+Z")
-        self.redo_action = QAction(QIcon("icons/redo.png"), "Redo", self)
-        self.redo_action.setShortcut("Ctrl+Y")
-
-        self.show_explorer_action = QAction("Show Explorer", self)
-        self.show_explorer_action.setCheckable(True)
-        self.show_explorer_action.setChecked(True)
-        self.show_output_action = QAction("Show Output", self)
-        self.show_output_action.setCheckable(True)
-        self.show_output_action.setChecked(True)
-
-        # Connect actions to methods (add these method definitions to the class)
-        self.new_action.triggered.connect(self.new_file)
-        self.open_action.triggered.connect(self.open_file)
-        self.save_action.triggered.connect(self.save_file)
-        self.exit_action.triggered.connect(self.close)
-        self.open_folder_action.triggered.connect(self.open_folder) # Connect the new action
-        self.cut_action.triggered.connect(self.text_cut)
-        self.copy_action.triggered.connect(self.text_copy)
-        self.paste_action.triggered.connect(self.text_paste)
-        self.undo_action.triggered.connect(self.text_undo)
-        self.redo_action.triggered.connect(self.text_redo)
-        self.show_explorer_action.toggled.connect(self.toggle_explorer)
-        self.show_output_action.toggled.connect(self.toggle_output)
-
-    def create_toolbars(self):
-        """
-        Creates the toolbars.
-        """
-        self.file_toolbar = self.addToolBar("File")
-        self.file_toolbar.setObjectName("FileToolbar")  # Set object name for CSS
-        self.file_toolbar.addAction(self.new_action)
-        self.file_toolbar.addAction(self.open_action)
-        self.file_toolbar.addAction(self.save_action)
-
-        self.edit_toolbar = self.addToolBar("Edit")
-        self.edit_toolbar.setObjectName("EditToolbar")
-        self.edit_toolbar.addAction(self.cut_action)
-        self.edit_toolbar.addAction(self.copy_action)
-        self.edit_toolbar.addAction(self.paste_action)
-        self.edit_toolbar.addAction(self.undo_action)
-        self.edit_toolbar.addAction(self.redo_action)
-
-    def create_status_bar(self):
-        """
-        Creates the status bar.
-        """
-        self.status_bar = self.statusBar()
-        self.status_bar.showMessage("Ready")
-
-    def create_central_widget(self):
-        """
-        Creates the central widget (the text editor).
-        """
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setTabsClosable(True)  # Enable close buttons on tabs
-        self.tab_widget.tabCloseRequested.connect(self.close_tab) # Connect the signal
-        self.text_edit_1 = QTextEdit()
-        self.text_edit_2 = QTextEdit()
-        self.tab_widget.addTab(self.text_edit_1, "Tab 1")
-        self.tab_widget.addTab(self.text_edit_2, "Tab 2")
-        self.setCentralWidget(self.tab_widget)
-
-    def create_panels(self):
-        """
-        Creates the side panels (Explorer and Output) as dockable widgets.
-        """
+    def create_file_explorer(self):
+        # Create a dockable panel for the file explorer
         self.explorer_panel = QDockWidget("Explorer", self)
-        self.explorer_panel.setObjectName("ExplorerPanel") # For CSS
+        self.explorer_panel.setObjectName("ExplorerPanel")
+
+        # Set up the file system model
         self.file_system_model = QFileSystemModel()
-        self.file_system_model.setRootPath(QDir.homePath()) # Start with the user's home directory
-        self.explorer_tree = QTreeView()
+        # Set root path to user's home directory
+        self.file_system_model.setRootPath(QDir.homePath())
+
+        # Create the tree view for the explorer, passing a callback for opening files
+        self.explorer_tree = ExplorerTreeView(open_file_callback=self.open_file_in_tab)
         self.explorer_tree.setModel(self.file_system_model)
+        # Set the root index to the home directory for display
         self.explorer_tree.setRootIndex(self.file_system_model.index(QDir.homePath()))
         self.explorer_panel.setWidget(self.explorer_tree)
+
+        # Add the explorer panel to the left dock area of the main window
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.explorer_panel)
 
+        # Hide unnecessary columns (like size, type, date modified) in the tree view
         for i in range(1, self.file_system_model.columnCount()):
             self.explorer_tree.setColumnHidden(i, True)
 
-        self.output_panel = QDockWidget("Output", self)
-        self.output_panel.setObjectName("OutputPanel") # For CSS
+    def open_file_in_tab(self, file_path):
+        """
+        Opens the content of a given file path in a new tab in the code area.
+        """
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            editor = QTextEdit()
+            editor.setText(content)
+            base_name = os.path.basename(file_path)
+            self.tab_widget.addTab(editor, base_name)
+            self.tab_widget.setCurrentWidget(editor)
+            self.status_bar.showMessage(f"Opened: {base_name}", 3000) # Show message for 3 seconds
+        except Exception as e:
+            # Show an error message box if file cannot be opened
+            QMessageBox.warning(self, "Error Opening File", f"Could not open file: {file_path}\nError: {e}")
+            self.status_bar.showMessage(f"Error opening file: {os.path.basename(file_path)}", 3000)
+
+
+    def create_output_panel(self):
+        # Create a dockable panel for the terminal output
+        self.output_panel = QDockWidget("Terminal", self) # Renamed to Terminal
+        self.output_panel.setObjectName("OutputPanel")
+
+        # Output text area (read-only)
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
-        self.output_panel.setWidget(self.output_text)
+        # Apply terminal-like styling
+        self.output_text.setStyleSheet("background-color: #000000; color: #00ff00; font-family: 'Consolas', monospace; font-size: 12px;")
+
+        # Input line edit for commands
+        self.input_line = QLineEdit() # Changed from QTextEdit to QLineEdit
+        self.input_line.setPlaceholderText("Enter command here...")
+        # Connect the Enter key press to execute the command
+        self.input_line.returnPressed.connect(self.execute_terminal_command)
+
+        # Clear button for the output
+        self.clear_output_button = QPushButton("Clear Terminal")
+        self.clear_output_button.clicked.connect(self.output_text.clear) # Connect to clear the output text
+        self.clear_output_button.setFixedHeight(30) # Make button a bit smaller
+
+        # Layout for input line and clear button
+        input_layout = QHBoxLayout()
+        input_layout.addWidget(self.input_line)
+        input_layout.addWidget(self.clear_output_button)
+        input_layout.setStretch(0, 1) # Make input line expand to fill available space
+
+        # Combined layout for output text and input/button layout
+        self.combined_layout = QVBoxLayout()
+        self.combined_layout.addWidget(self.output_text)
+        self.combined_layout.addLayout(input_layout) # Add the input layout
+
+        # Create a widget to hold the combined layout and set it as the dock widget's content
+        self.output_widget = QWidget()
+        self.output_widget.setLayout(self.combined_layout)
+        self.output_panel.setWidget(self.output_widget)
+        # Add the terminal panel to the bottom dock area
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.output_panel)
 
-        # Make the actions toggle the visibility of the panels
-        self.show_explorer_action.triggered.connect(self.explorer_panel.setVisible)
-        self.show_output_action.triggered.connect(self.toggle_output)
-        # Add actions to View menu to show/hide panels
-        view_menu = self.menuBar().addMenu("View")
-        view_menu.addAction(self.show_explorer_action)
-        view_menu.addAction(self.show_output_action)
-        self.file_menu = self.menuBar().addMenu("File")  # Get the File menu
-        self.file_menu.addAction(self.open_folder_action) # Add the new action
-
-
-    # --- Slots for Actions ---
-    def new_file(self):
-        new_tab = QTextEdit()
-        self.tab_widget.addTab(new_tab, f"Tab {self.tab_widget.count() + 1}")
-        self.tab_widget.setCurrentWidget(new_tab)
-        self.status_bar.showMessage("New Tab Created")
-
-    def open_file(self):
-        # In a real application, you'd use QFileDialog to get the file path
-        # and then read the file content into a new tab.
-        new_tab = QTextEdit()
-        new_tab.setText("Opening file (simulated)...\nThis is a placeholder.")
-        self.tab_widget.addTab(new_tab, f"File {self.tab_widget.count()}")  # Use a more descriptive tab title
-        self.tab_widget.setCurrentWidget(new_tab)  # Switch to the new tab
-        self.status_bar.showMessage("File Opened (simulated)")
-
-    def save_file(self):
-        # In a real application, you'd use QFileDialog
-        self.status_bar.showMessage("File Saved")
-
-    def text_cut(self):
-        current_text_edit = self.tab_widget.currentWidget()
-        if isinstance(current_text_edit, QTextEdit):
-            current_text_edit.cut()
-            self.status_bar.showMessage("Text Cut")
-
-    def text_copy(self):
-        current_text_edit = self.tab_widget.currentWidget()
-        if isinstance(current_text_edit, QTextEdit):
-            current_text_edit.copy()
-            self.status_bar.showMessage("Text Copied")
-
-    def text_paste(self):
-        current_text_edit = self.tab_widget.currentWidget()
-        if isinstance(current_text_edit, QTextEdit):
-            current_text_edit.paste()
-            self.status_bar.showMessage("Text Pasted")
-
-    def text_undo(self):
-        current_text_edit = self.tab_widget.currentWidget()
-        if isinstance(current_text_edit, QTextEdit):
-            current_text_edit.undo()
-            self.status_bar.showMessage("Undo")
-
-    def text_redo(self):
-        current_text_edit = self.tab_widget.currentWidget()
-        if isinstance(current_text_edit, QTextEdit):
-            current_text_edit.redo()
-            self.status_bar.showMessage("Redo")
-
-    def toggle_explorer(self, visible):
-        self.explorer_panel.setVisible(visible)
-        self.status_bar.showMessage(f"Explorer Panel: {'Visible' if visible else 'Hidden'}")
-
-    def toggle_output(self, visible):
-        self.output_panel.setVisible(visible)
-        self.status_bar.showMessage(f"Output Panel: {'Visible' if visible else 'Hidden'}")
-
-    def close_tab(self, index):
+    def execute_terminal_command(self):
         """
-        Closes the tab at the given index.
+        Executes the command entered in the input line and displays its output
+        in the output text area.
         """
+        command = self.input_line.text().strip() # Get command from QLineEdit and strip whitespace
+        self.input_line.clear() # Clear the input line immediately after getting the command
+
+        if not command:
+            return # Do nothing if the command is empty
+
+        # Display the command itself in gray in the output
+        self.output_text.append(f"<span style='color: #888888;'>$ {command}</span>")
+
+        try:
+            # Run the command using subprocess.
+            # shell=True allows execution of shell commands (like 'ls -l', 'grep', pipes).
+            # capture_output=True captures stdout and stderr.
+            # text=True decodes output as text (UTF-8 by default).
+            # check=False means we handle non-zero exit codes manually, not by raising an exception.
+            process = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                check=False,
+                encoding='utf-8' # Explicitly set encoding for consistent output
+            )
+
+            # Append standard output if any
+            if process.stdout:
+                self.output_text.append(process.stdout)
+            # Append standard error if any, styled in red
+            if process.stderr:
+                self.output_text.append(f"<span style='color: #ff6666;'>{process.stderr}</span>")
+
+            # Indicate if the command exited with a non-zero (error) code, styled in orange
+            if process.returncode != 0:
+                self.output_text.append(f"<span style='color: #ffaa00;'>Command exited with code {process.returncode}</span>")
+        except FileNotFoundError:
+            # Handle case where the command executable itself is not found
+            self.output_text.append(f"<span style='color: #ff6666;'>Error: Command '{command.split()[0]}' not found.</span>")
+        except Exception as e:
+            # Catch any other unexpected errors during subprocess execution
+            self.output_text.append(f"<span style='color: #ff6666;'>An unexpected error occurred: {e}</span>")
+
+        # Scroll the output text area to the very bottom to show the latest output
+        self.output_text.verticalScrollBar().setValue(self.output_text.verticalScrollBar().maximum())
+
+
+    def create_code_area(self):
+        # Create a tab widget to hold multiple code editors
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setTabsClosable(True) # Allow tabs to be closed
+        self.tab_widget.tabCloseRequested.connect(self.close_tab) # Connect signal for tab closing
+        self.setCentralWidget(self.tab_widget) # Set the tab widget as the central widget
+
+    def create_menu_bar(self):
+        # Create the main menu bar
+        self.menu_bar = QMenuBar(self)
+        self.setMenuBar(self.menu_bar) # Set it as the main window's menu bar
+
+        # Actions for showing/hiding explorer and terminal panels
+        self.show_explorer_action = QAction("Show Explorer", self)
+        self.show_explorer_action.setCheckable(True)
+        self.show_explorer_action.setChecked(True) # Explorer is visible by default
+
+        self.show_output_action = QAction("Show Terminal", self) # Renamed action for clarity
+        self.show_output_action.setCheckable(True)
+        self.show_output_action.setChecked(True) # Terminal is visible by default
+
+        # File Menu
+        self.file_menu = self.menu_bar.addMenu("File")
+        self.file_menu.addAction("Open Folder", self.open_folder)
+        self.file_menu.addAction("New File", self.create_new_file)
+
+        # Edit Menu
+        self.edit_menu = self.menu_bar.addMenu("Edit")
+
+        # Selection Menu
+        self.selection_menu = self.menu_bar.addMenu("Selection")
+
+        # View Menu (contains show/hide actions for panels)
+        self.view_menu = self.menu_bar.addMenu("View")
+        self.view_menu.addAction(self.show_explorer_action)
+        self.view_menu.addAction(self.show_output_action)
+
+        # Go Menu
+        self.go_menu = self.menu_bar.addMenu("Go")
+
+        # Run Menu
+        self.run_menu = self.menu_bar.addMenu("Run")
+
+        # Terminal Menu
+        self.terminal_menu = self.menu_bar.addMenu("Terminal")
+        # Action to show the terminal panel (it's already created, just show/hide)
+        self.terminal_menu.addAction("New Terminal", lambda: self.output_panel.show())
+
+        # Connect actions to toggle visibility of dock widgets
+        self.show_explorer_action.toggled.connect(self.explorer_panel.setVisible)
+        self.show_output_action.toggled.connect(self.output_panel.setVisible)
+
+    def close_tab(self,index):
+        """Closes the tab at the given index in the tab widget."""
         self.tab_widget.removeTab(index)
-        self.status_bar.showMessage(f"Tab {index + 1} Closed") # Human-readable tab index
 
     def open_folder(self):
         """
-        Opens a folder using tkinter's filedialog and sets it as the root for the Explorer panel.
+        Opens a folder selected by the user in the file explorer.
         """
-        root = tk.Tk()
-        root.withdraw()  # Hide the main tkinter window
-        folder_path = filedialog.askdirectory(title="Open Folder")
+        folder_path = QFileDialog.getExistingDirectory(self, "Select Folder", QDir.homePath())
         if folder_path:
+            # Set the new root path for the file system model and tree view
             self.file_system_model.setRootPath(folder_path)
             self.explorer_tree.setRootIndex(self.file_system_model.index(folder_path))
-            self.status_bar.showMessage(f"Opened folder: {folder_path}")
+            self.explorer_tree.expandAll() # Expand all directories in the new folder
+            self.explorer_panel.setWindowTitle(os.path.basename(folder_path)) # Update panel title
+            self.status_bar.showMessage(f"Opened folder: {os.path.basename(folder_path)}", 3000)
+
+    def create_status_bar(self):
+        """
+        Creates and configures the status bar at the bottom of the main window.
+        """
+        self.status_bar = QStatusBar(self)
+        self.setStatusBar(self.status_bar)
+
+        # Create various status buttons (currently placeholders)
+        self.go_to_line_col = QPushButton("Go to Line/Col")
+        self.go_to_line_col.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+        self.select_indentaion = QPushButton("Select Indentation")
+        self.select_indentaion.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+        self.select_encoding = QPushButton("Select Encoding")
+        self.select_encoding.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+        self.select_language_mode = QPushButton("Select Language Mode")
+        self.select_language_mode.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+        self.notification = QPushButton("Notification")
+        self.notification.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+
+        # List of all status bar widgets
+        all_widgets = [self.go_to_line_col, self.select_indentaion, self.select_encoding, self.select_language_mode, self.notification]
+        for widget in all_widgets:
+            widget.setFixedHeight(25) # Set a fixed height for consistency
+            self.status_bar.addPermanentWidget(widget) # Add widgets permanently to the right side
+
+    def create_new_file(self):
+        """
+        Prompts the user for a new file name and creates an empty file
+        in the currently selected folder in the explorer.
+        """
+        selected_folder_index = self.explorer_tree.currentIndex()
+        # Determine the target folder path
+        if not selected_folder_index.isValid() or not self.file_system_model.isDir(selected_folder_index):
+            # If no valid folder is selected, use the current root path of the file system model
+            folder_path = self.file_system_model.rootPath()
         else:
-            self.status_bar.showMessage("No folder selected.")
+            # Otherwise, use the path of the selected folder
+            folder_path = self.file_system_model.filePath(selected_folder_index)
+
+        # Get file name from user via input dialog
+        file_name, ok = QInputDialog.getText(self, "New File", "Enter file name:")
+        if ok and file_name:
+            new_file_path = os.path.join(folder_path, file_name)
+            try:
+                # Create an empty file
+                with open(new_file_path, 'w', encoding='utf-8') as f:
+                    pass
+                self.status_bar.showMessage(f"Created new file: {file_name}", 3000)
+                # Refresh the explorer tree to show the new file (by re-setting root path)
+                self.file_system_model.setRootPath(self.file_system_model.rootPath())
+                # Optionally open the new file in a tab
+                self.open_file_in_tab(new_file_path)
+            except Exception as e:
+                # Show a critical error message box if file creation fails
+                QMessageBox.critical(self, "Error Creating File", f"Could not create file: {new_file_path}\nError: {e}")
+                self.status_bar.showMessage(f"Error creating file: {file_name}", 3000)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    vscode_clone = VSCodeClone()
-    vscode_clone.show()
+    code_edditor = Code_Edditor()
+    code_edditor.show()
     sys.exit(app.exec())

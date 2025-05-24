@@ -3,14 +3,16 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTextEdit, QToolBar, QToolButton, QSplitter, QTabWidget,
     QStatusBar, QDockWidget, QListWidget, QListWidgetItem,
-    QTabBar, QTreeView, QMenuBar, QMenu,QFileDialog,QPushButton,QInputDialog
+    QTabBar, QTreeView, QMenuBar, QMenu,QFileDialog,QPushButton,QInputDialog,QLineEdit
 )
 from PySide6.QtGui import QAction, QIcon, QFont
 from PySide6.QtCore import Qt, QSize, QDir, QModelIndex
 from PySide6.QtWidgets import QFileSystemModel
-import tkinter as tk
-from tkinter import filedialog
 import os
+import subprocess
+from winpty import *
+import re
+from ansi2html import Ansi2HTMLConverter
 
 class ExplorerTreeView(QTreeView):
     def __init__(self, parent=None, open_file_callback=None):
@@ -247,8 +249,18 @@ class Code_Edditor(QMainWindow):
         self.output_panel = QDockWidget("Output", self)
         self.output_panel.setObjectName("OutputPanel")
         self.output_text = QTextEdit()
+        self.input_area = QLineEdit()
+        self.input_area.setFixedHeight(50)
+        self.input_area.setStyleSheet("background-color: #1e1e1e; color: #ffffff; border: 1px solid #333;")
+        self.input_area.setPlaceholderText("Enter your command here...")
+        self.input_area.returnPressed.connect(self.execute_terminal_command)
         self.output_text.setReadOnly(True)
-        self.output_panel.setWidget(self.output_text)
+        self.combined_layout = QVBoxLayout()
+        self.combined_layout.addWidget(self.output_text)
+        self.combined_layout.addWidget(self.input_area)
+        self.output_widget = QWidget()
+        self.output_widget.setLayout(self.combined_layout)
+        self.output_panel.setWidget(self.output_widget)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.output_panel)
 
     def create_code_area(self):
@@ -295,6 +307,22 @@ class Code_Edditor(QMainWindow):
     def create_status_bar(self):
         self.status_bar = QStatusBar(self)
         self.setStatusBar(self.status_bar)
+        self.go_to_line_col = QPushButton("Go to Line/Col")
+        self.go_to_line_col.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+        self.select_indentaion = QPushButton("Select Indentation")
+        self.select_indentaion.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+        self.select_encoding = QPushButton("Select Encoding")
+        self.select_encoding.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+        self.select_language_mode = QPushButton("Select Language Mode")
+        self.select_language_mode.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+        self.notification = QPushButton("Notification")
+        self.notification.setStyleSheet("background-color: #2d2d2d; color: #b0b0b0;")
+        all_widgets = [self.go_to_line_col, self.select_indentaion, self.select_encoding, self.select_language_mode, self.notification]
+        for widget in all_widgets:
+            widget.setFixedHeight(25)
+            self.status_bar.addPermanentWidget(widget)
+    def execute_terminal_command(self):
+        pass
     def create_new_file(self):
         selected_folder = self.explorer_tree.currentIndex()
         if selected_folder.isValid():
@@ -304,10 +332,6 @@ class Code_Edditor(QMainWindow):
                 new_file_path = os.path.join(folder_path, file_name)
                 with open(new_file_path, 'w') as f:
                     pass
-
-    
-
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     code_edditor = Code_Edditor()
