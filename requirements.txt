@@ -1,0 +1,5 @@
+pyside6==6.9.1
+pyside6-addons==6.9.1
+pyside6-essentials==6.9.1
+pywinpty==2.0.15
+shiboken6==6.9.1

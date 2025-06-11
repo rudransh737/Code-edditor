@@ -8,3 +8,5 @@ wheels/
 
 # Virtual environments
 .venv
+# others
+who_knows

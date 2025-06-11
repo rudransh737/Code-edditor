@@ -9,12 +9,29 @@ from PySide6.QtGui import QAction, QIcon, QFont
 from PySide6.QtCore import Qt, QSize, QDir, QModelIndex
 from PySide6.QtWidgets import QFileSystemModel
 from PySide6.QtWebEngineWidgets import QWebEngineView
-
+import time
 import os
 import subprocess
-from winpty import *
+import threading
+from winpty import PTY
 import re
-from ansi2html import Ansi2HTMLConverter
+# from ansi2html import Ansi2HTMLConverter
+
+class ThreadedPTY():
+    def __init__(self, pty):
+        self.pty = pty
+        self.thread = threading.Thread(target=self.run)
+        self.thread.daemon = True
+        self.thread.start()
+
+    def run(self):
+        while True:
+            output = self.pty.read()
+            if output:
+                print(output.decode('utf-8', errors='ignore'), end='')
+
+    def write(self, command):
+        self.pty.write(command)
 
 class ExplorerTreeView(QTreeView):
     def __init__(self, parent=None, open_file_callback=None):
@@ -218,10 +235,12 @@ class Code_Edditor(QMainWindow):
             }
         """)
         self.create_file_explorer()
+        self.integrated_browser()
         self.create_output_panel()
         self.create_code_area()
         self.create_menu_bar()
         self.create_status_bar()
+        self.initialize_terminal()
 
     def create_file_explorer(self):
         self.explorer_panel = QDockWidget("Explorer", self)
@@ -247,7 +266,44 @@ class Code_Edditor(QMainWindow):
         self.tab_widget.addTab(editor, base_name)
         self.tab_widget.setCurrentWidget(editor)
     def integrated_browser(self):
-        pass
+        self.reload_button = QAction("R")
+        self.reload_button.triggered.connect(self.reload)
+        self.back_button = QAction(">")
+        self.back_button.triggered.connect(self.back)
+        self.forward_button = QAction("<")
+        self.forward_button.triggered.connect(self.forward)
+        self.url_bar = QLineEdit()
+        self.url_bar.setStyleSheet("background-color: #1e1e1e; color: #ffffff; border: 1px solid #333;")
+        self.go_button = QAction("<")
+        self.go_button.triggered.connect(self.change_url)
+        self.nav_bar = QToolBar()
+        self.nav_bar.addAction(self.reload_button)
+        self.nav_bar.addAction(self.back_button)
+        self.nav_bar.addAction(self.forward_button)
+        self.nav_bar.addWidget(self.url_bar)
+        self.webview_layout = QVBoxLayout()
+        self.webview = QWebEngineView()
+        self.webview.urlChanged.connect(self.update_url)
+        self.webview_layout.addWidget(self.nav_bar)
+        self.webview_layout.addWidget(self.webview)
+        self.webview.setUrl("https://www.duckduckgo.com")
+        self.webview_frame = QWidget()
+        self.webview_frame.setLayout(self.webview_layout)
+        self.integrated_browser_panel = QDockWidget("Browser",self)
+        self.integrated_browser_panel.setObjectName("Browser")
+        self.integrated_browser_panel.setWidget(self.webview_frame)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.integrated_browser_panel)
+    def reload(self):
+        self.webview.reload()
+    def back(self):
+        self.webview.back()
+    def forward(self):
+        self.webview.forward()
+    def change_url(self):
+        url = self.url_bar.text()
+        self.webview.setUrl(url)
+    def update_url(self,url):
+        self.url_bar.setText(url.toString())
     def create_output_panel(self):
         self.output_panel = QDockWidget("Output", self)
         self.output_panel.setObjectName("OutputPanel")
@@ -326,6 +382,13 @@ class Code_Edditor(QMainWindow):
             self.status_bar.addPermanentWidget(widget)
     def execute_terminal_command(self):
         pass
+    def initialize_terminal(self):
+        pass
+        
+
+    
+
+
     def create_new_file(self):
         selected_folder = self.explorer_tree.currentIndex()
         if selected_folder.isValid():
